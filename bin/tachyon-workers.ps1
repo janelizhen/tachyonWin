@@ -28,8 +28,9 @@ foreach ($hostContent in $hostlistContent)
     Write-Host "Connecting to $hostContent as $env:USERNAME..."
     if ($global:TACHYON_SSH_FOREGROUND -ne $null)
     {
-        #Invoke-Command -ComputerName $hostContent {& "$($args[0])\tachyon.ps1" formatWorker} -ArgumentList $bin
-        & "$bin/tachyon.ps1" formatWorker
+        $cmdStr = "$bin/tachyon.ps1"
+        Invoke-Command -ComputerName $hostContent {& "$cmdStr" $args} -ArgumentList $args
+        #& "$bin/tachyon.ps1" formatWorker
     }
     else
     {

@@ -31,7 +31,7 @@ function ensure_dirs
 {
     if (-not (Test-Path -Path $global:TACHYON_LOGS_DIR -PathType Container))
     {
-        echo "TACHYON_LOGS_DIR: $global:TACHYON_LOGS_DIR"
+        Write-Host "TACHYON_LOGS_DIR: $global:TACHYON_LOGS_DIR"
         mkdir $global:TACHYON_LOGS_DIR
     }
 }
@@ -40,7 +40,7 @@ function get_env
 {
     $DEFAULT_LIBEXEC_DIR = "$bin/../libexec"
     $TACHYON_LIBEXEC_DIR = @{$true=$DEFAULT_LIBEXEC_DIR;$false=$global:TACHYON_LIBEXEC_DIR}[$global:TACHYON_LIBEXEC_DIR -eq $null]
-    & "$TACHYON_LIBEXEC_DIR\tachyon-config.ps1"
+    & "TACHYON_LIBEXEC_DIR\tachyon-config.ps1"
 }
 
 function check_mount_mode
@@ -93,7 +93,7 @@ function stop
 function start_master
 {
     $MASTER_ADDRESS = $global:TACHYON_MASTER_ADDRESS
-    if ($TACHYON_MASTER_ADDRESS -eq $null)
+    if ($global:TACHYON_MASTER_ADDRESS -eq $null)
     {
         $MASTER_ADDRESS = "localhost"
     }
@@ -257,4 +257,88 @@ if ($args[0].ContainsKey('N'))
 $args = shift -toshift $args
 Write-Host "shifted: $args"
 
-if 
+$WHAT = $args[0]
+
+if ($WHAT -ne $null)
+{
+    Write-Host "Error: no WHAT specified"
+    Write-Host "$Usage"
+    exit
+}
+
+get_env
+
+ensure_dirs
+
+if ($WHAT -eq "all")
+{
+    check_mount_mode $args[1]
+    if ($killonstart -ne "no")
+    {
+        stop $bin
+    }
+    start_master $args[2]
+    Start-Sleep -Seconds 2
+    & "$bin/tachyon-workers.ps1" (& "$bin/tachyon-start.ps1" worker $args[1])
+}
+elif ($WHAT -eq "local")
+{
+    if ($killonstart -ne "no")
+    {
+        stop $bin
+        Start-Sleep -Seconds 1
+    }
+    $stat = (& "$bin/tachyon-mount.ps1" SudoMount)
+    if ($stat -ne $null)
+    {
+        Write-Host "Mount failed, not starting"
+        exit
+    }
+    if ($args[1] -ne $null -and $args[1] -ne "-f")
+    {
+        Write-Host $Usage
+        exit
+    }
+    start_master $args[1]
+    Start-Sleep -Seconds 2
+    start_worker NoMount
+}
+elif ($WHAT -eq "master")
+{
+    if ($args[1] -ne $null -and $args[1] -ne "-f")
+    {
+        Write-Host $Usage
+        exit
+    }
+    start_master $args[1]
+}
+elif ($WHAT -eq "worker")
+{
+    check_mount_mode $args[1]
+    start_worker $args[1]
+}
+elif ($WHAT -eq "safe")
+{
+    run_safe
+}
+elif ($WHAT -eq "workers")
+{
+    check_mount_mode $args[1]
+    & "$bin/tachyon-workers.ps1" (& "$bin/tachyon-start.ps1" worker $args[1] $global:TACHYON_MASTER_ADDRESS)
+}
+elif ($WHAT -eq "restart_worker")
+{
+    restart_worker
+}
+elif ($WHAT -eq "restart_workers")
+{
+    & "$bin/tachyon-workers.ps1" (& "$bin/tachyon-start.ps1" restart_worker)
+}
+else
+{
+    Write-Host "Error: Invalid WHAT: $WHAT"
+    Write-Host $Usage
+    exit
+}
+
+Start-Sleep -Seconds 2
